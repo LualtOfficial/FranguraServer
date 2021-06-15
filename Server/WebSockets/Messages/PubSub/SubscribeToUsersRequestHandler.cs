@@ -18,8 +18,7 @@ namespace FiguraServer.Server.WebSockets.Messages.PubSub
             {
                 Guid targetID = ReadMinecraftUUIDFromBinaryReader(reader);
 
-                PubSubManager.Subscribe(targetID, connection.playerID, connection);
-                Logger.LogMessage("Subscribing user " + connection.playerID + " to " + targetID);
+                PubSubManager.Subscribe(connection.playerID, targetID);
             }
 
             return string.Empty;

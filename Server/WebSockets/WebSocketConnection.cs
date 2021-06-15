@@ -41,7 +41,7 @@ namespace FiguraServer.Server.WebSockets
         private static ConcurrentQueue<byte[]> messageHeaderPool = new ConcurrentQueue<byte[]>();
         private static ConcurrentQueue<Task<byte[]>> messageTaskList = new ConcurrentQueue<Task<byte[]>>();
 
-        private static ConcurrentDictionary<Guid, WebSocketConnection> openedConnections = new ConcurrentDictionary<Guid, WebSocketConnection>();
+        public static ConcurrentDictionary<Guid, WebSocketConnection> openedConnections = new ConcurrentDictionary<Guid, WebSocketConnection>();
         private static ConcurrentDictionary<Guid, Tuple<Timer, RateLimiterGroup>> rateLimitGroups = new ConcurrentDictionary<Guid, Tuple<Timer, RateLimiterGroup>>();
 
         public WebSocket socket;
@@ -93,12 +93,13 @@ namespace FiguraServer.Server.WebSockets
 
         public void Dispose()
         {
+            Logger.LogMessage("Closing connection for player ID " + playerID.ToString());
+
             openedConnections.TryRemove(playerID, out _);
             PubSubManager.Unsubscribe(playerID, playerID);
 
             //Unsubscribe!
-            foreach(Guid id in subscribedIDs)
-                PubSubManager.Unsubscribe(id, playerID);
+            PubSubManager.UnsubscribeAll(playerID);
 
             //Start rate limit cleanup timer.
             if(rateLimitGroups.TryGetValue(playerID, out var v))
@@ -252,8 +253,9 @@ namespace FiguraServer.Server.WebSockets
                     //Set our rate group to the given group
                     rateGroup = timerGroupPair.Item2;
 
+                    Logger.LogMessage("Open connection for player ID " + playerID.ToString());
                     openedConnections.AddOrUpdate(playerID, this, (k, v) => this);
-                    PubSubManager.Subscribe(playerID, playerID, this);
+                    PubSubManager.Subscribe(playerID, playerID);
                 }
                 else
                 {

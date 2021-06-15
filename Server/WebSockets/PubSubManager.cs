@@ -19,23 +19,25 @@ namespace FiguraServer.Server.WebSockets
             return ret;
         }
 
-        private static bool TryGetChannel(Guid target, out PubSubChannel psc) => currentChannels.TryGetValue(target, out psc);
+        private static bool TryGetChannel(Guid myID, out PubSubChannel psc) => currentChannels.TryGetValue(myID, out psc);
 
-        private static PubSubChannel GetChannel(Guid target) => currentChannels.GetOrAdd(target, MakeChannel);
+        private static PubSubChannel GetChannel(Guid myID) => currentChannels.GetOrAdd(myID, MakeChannel);
 
-        public static void Subscribe(Guid target, Guid myID, WebSocketConnection connection) => GetChannel(target).dict.TryAdd(myID, connection);
+        public static void Subscribe(Guid myID, Guid target) => GetChannel(myID).AddSubscription(target);
 
-        public static void Unsubscribe(Guid target, Guid myID) => GetChannel(target).RemoveSubscription(myID);
+        public static void Unsubscribe(Guid myID, Guid target) => GetChannel(myID).RemoveSubscription(target);
 
-        public static void SendMessage(Guid target, MessageSender message, Action onFinished = null) => GetChannel(target).SendMessage(message, onFinished);
+        public static void UnsubscribeAll(Guid myID) => GetChannel(myID).ClearSubs();
 
-        private static void OnEmptied(Guid id) => currentChannels.TryRemove(id, out var psc);
+        public static void SendMessage(Guid myID, MessageSender message, Action onFinished = null) => GetChannel(myID).SendMessage(message, onFinished);
+
+        private static void OnEmptied(Guid myID) => currentChannels.TryRemove(myID, out var psc);
 
         public class PubSubChannel
         {
             public Guid ownerID;
             public bool isValid = true;
-            public Dictionary<Guid, WebSocketConnection> dict = new Dictionary<Guid, WebSocketConnection>();
+            public HashSet<Guid> subscriptionList = new HashSet<Guid>();
 
             private object lockObject = new object();
             private Task workTask = Task.CompletedTask;
@@ -43,14 +45,16 @@ namespace FiguraServer.Server.WebSockets
             public Action onEmptied;
 
             //Adds a subscription
-            public void AddSubscription(Guid id, WebSocketConnection connection)
+            public void AddSubscription(Guid id)
             {
                 AddTask(() =>
                 {
                     if (!isValid)
                         return;
 
-                    dict[id] = connection;
+                    Logger.LogMessage("Subscribing user " + ownerID + " to " + id);
+
+                    subscriptionList.Add(id);
                 });
             }
 
@@ -62,9 +66,11 @@ namespace FiguraServer.Server.WebSockets
                     if (!isValid)
                         return;
 
-                    dict.Remove(id, out _);
+                    subscriptionList.Remove(id);
 
-                    if (dict.Count == 0)
+                    Logger.LogMessage("Unsubscribing user " + ownerID + " from " + id);
+
+                    if (subscriptionList.Count == 0)
                     {
                         isValid = false;
                         onEmptied?.Invoke();
@@ -81,20 +87,34 @@ namespace FiguraServer.Server.WebSockets
                         return;
 
                     //Foreach subscription
-                    foreach(var kvp in dict)
+                    foreach (var id in subscriptionList)
                     {
                         //If subscription is the owner of this channel, don't send a message.
-                        if (kvp.Key == ownerID)
+                        if (id == ownerID)
                             continue;
 
                         //If the subscription has a channel.
-                        if(TryGetChannel(kvp.Key, out var psc))
+                        if (TryGetChannel(id, out var psc))
                         {
                             //Add task to subscription.
-                            psc.AddTask(()=> {
+                            psc.AddTask(() =>
+                            {
+                                if (!isValid)
+                                    return;
+
                                 //If subscription is also subscribed to this channel
-                                if(psc.dict.ContainsKey(ownerID))
-                                    kvp.Value.SendMessage(sender);
+                                if (psc.subscriptionList.Contains(ownerID))
+                                {
+                                    Logger.LogMessage("Sending message " + sender.GetType().Name + " to user " + id);
+                                    if (WebSocketConnection.openedConnections.TryGetValue(id, out var conn))
+                                    {
+                                        conn.SendMessage(sender);
+                                    }
+                                }
+                                else
+                                {
+                                    Logger.LogMessage("Failed to send message " + sender.GetType().Name + " to user " + id + ", not mutual subscription");
+                                }
                             });
                         }
                     }
@@ -105,7 +125,8 @@ namespace FiguraServer.Server.WebSockets
 
             public void Close()
             {
-                AddTask(()=> {
+                AddTask(() =>
+                {
                     isValid = false;
                 });
             }
@@ -120,6 +141,18 @@ namespace FiguraServer.Server.WebSockets
 
                     workTask = workTask.ContinueWith((t) => a());
                 }
+            }
+
+            public void ClearSubs()
+            {
+                AddTask(() =>
+                {
+                    subscriptionList.Clear();
+                    isValid = false;
+                    onEmptied?.Invoke();
+
+                    Logger.LogMessage("Cleared all subscriptions for user " + ownerID);
+                });
             }
         }
     }

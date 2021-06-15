@@ -17,7 +17,7 @@ namespace FiguraServer.Server.WebSockets.Messages.PubSub
             {
                 Guid targetID = ReadMinecraftUUIDFromBinaryReader(reader);
 
-                PubSubManager.Unsubscribe(targetID, connection.playerID);
+                PubSubManager.Unsubscribe(connection.playerID, targetID);
             }
 
             return string.Empty;
