@@ -93,6 +93,9 @@ namespace FiguraServer.Server.WebSockets
                         if (id == ownerID)
                             continue;
 
+                        Logger.LogMessage("Sending message " + sender.GetType().Name + " to user " + id);
+
+
                         //If the subscription has a channel.
                         if (TryGetChannel(id, out var psc))
                         {
@@ -116,6 +119,9 @@ namespace FiguraServer.Server.WebSockets
                                     Logger.LogMessage("Failed to send message " + sender.GetType().Name + " to user " + id + ", not mutual subscription");
                                 }
                             });
+                        } else
+                        {
+                            Logger.LogMessage("User " + id + " has no channel open");
                         }
                     }
 

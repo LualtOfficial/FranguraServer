@@ -14,6 +14,7 @@ namespace FiguraServer.Server.WebSockets.Messages.Pings
             if (!connection.pingRateLimiter.TryTakePoints(1))
             {
                 connection.SendMessage(new ErrorMessageSender(ErrorMessageSender.PING_RATE_LIMIT));
+                Logger.LogMessage("User " + connection.playerID + " hit ping rate limit");
                 return string.Empty;
             }
 
@@ -25,6 +26,7 @@ namespace FiguraServer.Server.WebSockets.Messages.Pings
             if (!connection.pingByteRateLimiter.TryTakePoints(dataSize - sizeof(short)))
             {
                 connection.SendMessage(new ErrorMessageSender(ErrorMessageSender.PING_BYTE_RATE_LIMIT));
+                Logger.LogMessage("User " + connection.playerID + " hit ping byte rate limit");
                 return string.Empty;
             }
 
@@ -34,6 +36,8 @@ namespace FiguraServer.Server.WebSockets.Messages.Pings
             PingMessageSender sender = new PingMessageSender(data, connection.playerID);
 
             PubSubManager.SendMessage(connection.playerID, sender);
+
+            Logger.LogMessage("Sending ping from user " + connection.playerID + " of size " + dataSize);
 
             return string.Empty;
         }
