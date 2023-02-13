@@ -12,7 +12,6 @@ namespace FiguraServer.Data
 {
     public class User
     {
-        public const int MAX_USER_DATA_SIZE = 1024 * 100;
         public static readonly SHA256 hasher = SHA256.Create();
 
         private Guid id;
@@ -69,11 +68,6 @@ namespace FiguraServer.Data
             //If the avatar is 0 bytes long, ignore it.
             if (data.Length == 0)
                 return (2, Guid.Empty);
-
-            //If the avatar would be too large to fit into the userdata, cancel.
-            if (totalAvatarSize + data.Length > MAX_USER_DATA_SIZE)
-                return (3, Guid.Empty);
-
 
             //Generate new avatar using the data the user provided.
             Guid newId = Guid.NewGuid();
